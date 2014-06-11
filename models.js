@@ -29,8 +29,8 @@ module.exports = function (db, cb) {
    	// Project model
    	db.define('projects', {
    		name     : String,
-   		deadline : Number,
-   		created  : Number
+   		deadline : String,
+   		created  : String
    	});
 
    	// Task model
@@ -42,6 +42,13 @@ module.exports = function (db, cb) {
    		finished    : Boolean,
    		evaluation  : String,
    		hours       : String
+   	});
+
+   	// Message model
+   	db.define('messages', {
+   		created     : String,
+   		body        : String,
+   		author      : String
    	});
 
     return cb();

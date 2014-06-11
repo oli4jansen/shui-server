@@ -48,9 +48,11 @@ orm.connect(config.dbPath, function (err, db) {
         var Token   = db.models.tokens;
         var Project = db.models.projects;
         var Task    = db.models.tasks;
+        var Message = db.models.messages;
 
         Project.hasMany('participants', User, { joined: Date }, { reverse: 'projects' });
         Task.hasOne('project', Project, { reverse: 'tasks' });
+        Message.hasOne('project', Project, { reverse: 'messages' });
 
         db.sync();
 
@@ -384,8 +386,6 @@ orm.connect(config.dbPath, function (err, db) {
                         project.hasParticipants(me, function (err, bool) {
                             if(bool) {
 
-                                console.log(req.body);
-
                                 Task.create({
                                     project_id  : req.params.id,
                                     name        : req.body.name,
@@ -401,6 +401,8 @@ orm.connect(config.dbPath, function (err, db) {
                                         res.send({ msg: err });
                                     }else{
                                         res.send(item);
+
+                                        // Trigger notification HERE (to person task is assigned to)
                                     }
                                 });
                             }else{
@@ -474,6 +476,9 @@ orm.connect(config.dbPath, function (err, db) {
                                                 res.send({ msg: err });
                                             }else{
                                                 res.send({});
+
+                                                // Trigger notification HERE (to person that assigned task)
+
                                             }
                                         });
                                     }else{
@@ -491,6 +496,80 @@ orm.connect(config.dbPath, function (err, db) {
             });
         });
 
+    // Get all messages
+       server.get('/projects/:id/messages', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/messages');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+                                project.getMessages([ "id", "Z"], function (err, messages) {
+                                    if(err) console.log(err);
+                                    if(messages) {
+                                        res.send(messages);
+                                    }else{
+                                        res.send([]);
+                                    }
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+    // Create a message
+       server.post('/projects/:id/messages', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/messages [POST]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+
+                                var now = new Date();
+                                var year = now.getFullYear();
+                                var month = now.getMonth()+1;
+                                var date = now.getDate();
+                                var hours = now.getHours();
+                                var minutes = now.getMinutes();
+                                var seconds = now.getSeconds();
+
+                                Message.create({
+                                    body       : req.body.body,
+                                    author     : req.username,
+                                    project_id : req.params.id,
+                                    created    :  year+'-'+month+'-'+date+' '+hours+':'+minutes+':'+seconds
+                                }, function (err, item) {
+                                    if(err) {
+                                        console.log(err);
+                                        res.status(500);
+                                        res.send({ msg: err });
+                                    }else{
+                                        res.send(item);
+
+                                        // Trigger notification HERE (to person task is assigned to)
+                                    }
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
         server.listen(3000);
     });
 });
