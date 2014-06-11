@@ -1,0 +1,17 @@
+{
+    "name": "shui-server",
+    "description": "API server for Shui",
+    "keywords": ["shui"],
+    "version": "0.0.1",
+    "author": "Olivier Jansen <oli4jansen.nl@gmail.com> (http://oli4jansen.nl/)",
+    "main": "server.js",
+    "dependencies": {
+        "underscore": "1.x",
+        "crypto": "0.0.3",
+        "restify": "2.8.1",
+        "restify-oauth2": "4.0.0",
+        "mysql": ">=2.3.2",
+        "orm": ">=2.0.0-alpha6",
+        "emailjs": "0.3.x"
+    }
+}
