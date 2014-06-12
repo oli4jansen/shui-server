@@ -49,10 +49,12 @@ orm.connect(config.dbPath, function (err, db) {
         var Project = db.models.projects;
         var Task    = db.models.tasks;
         var Message = db.models.messages;
+        var File    = db.models.files;
 
         Project.hasMany('participants', User, { joined: Date }, { reverse: 'projects' });
         Task.hasOne('project', Project, { reverse: 'tasks' });
         Message.hasOne('project', Project, { reverse: 'messages' });
+        File.hasOne('project', Project, { reverse: 'files' });
 
         db.sync();
 
@@ -273,29 +275,35 @@ orm.connect(config.dbPath, function (err, db) {
             User.get(req.username, function (err, me) {
                 me.getProjects(function (err, projects) {
 
-                    projects.forEach(function (project) {
+                    if(projects && projects.length > 0) {
+                        projects.forEach(function (project) {
 
-                        project.openTasks = 0;
-                        project.myTasks = 0;
-                        project.participants = [];
+                            project.openTasks = 0;
+                            project.myTasks = 0;
+                            project.participants = [];
 
-                        project.getTasks(function (err, tasks) {
-                            if(tasks) {
-                                tasks.forEach(function (task) {
-                                    if(!task.finished) project.openTasks++;
-                                    if(!task.finished && task.assignedTo == req.username) project.myTasks++;
+                            project.getTasks(function (err, tasks) {
+                                if(tasks) {
+                                    tasks.forEach(function (task) {
+                                        if(!task.finished) project.openTasks++;
+                                        if(!task.finished && task.assignedTo == req.username) project.myTasks++;
+                                    });
+                                }
+
+                                project.getParticipants(function (err, participants) {
+                                    if(err) console.log(err);
+
+                                    participants.forEach(function (participant) {
+                                        project.participants.push({ name: participant.name, email: participant.email });
+                                    });
+
+                                    res.send(projects);
                                 });
-                            }
-
-                            project.getParticipants(function (err, participants) {
-                                participants.forEach(function (participant) {
-                                    project.participants.push({ name: participant.name, email: participant.email });
-                                });
-
-                                res.send(projects);
                             });
                         });
-                    });
+                    }else{
+                        res.send([]);
+                    }
                 });
             });
         });
@@ -330,10 +338,65 @@ orm.connect(config.dbPath, function (err, db) {
                                         });
                                     });
                                     response.tasks = (tasks) ? tasks.length : 0;
-                                    response.messages = 2;
-                                    response.files = 1;
 
                                     res.send(response);
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+    // Invite someone
+        server.put('/projects/:id/participants', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/participants [PUT]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+                                project.getParticipants(function (err, participants) {
+                                    var isPersonAlreadyParticipant = false;
+                                    participants.forEach(function(participant) {
+                                        if(participant.email == req.body.email) isPersonAlreadyParticipant = true;
+                                    });
+
+                                    if(!isPersonAlreadyParticipant) {
+
+                                        User.get(req.body.email, function (err, person) {
+                                            if(err) console.log(err);
+                                            if(!person) {
+                                                res.status(404);
+                                                res.send({ msg: 'This person isnt registered for Shui yet.' });
+                                            }else{
+                                                project.addParticipants(person, function(err){
+                                                    if(!err) {
+                                                        res.send({
+                                                            name: person.name,
+                                                            email: person.email
+                                                        });
+
+                                                        // Notification for person
+
+                                                    }else{
+                                                        res.status(500);
+                                                        res.send({ msg: err });
+                                                    }
+                                                });
+                                            }
+                                        });
+
+                                    }else{
+                                        res.status(409);
+                                        res.send({ msg: 'This person is already a participant.' });
+                                    }
                                 });
                             }else{
                                 res.status(404);
@@ -570,6 +633,158 @@ orm.connect(config.dbPath, function (err, db) {
                 });
             });
         });
+
+    // Delete a message
+        server.del('/projects/:id/messages/:messageId', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/tasks/:taskId [DELETE]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+                                Message.get(req.params.messageId, function (err, message) {
+                                    if(message.author == req.username) {
+                                        message.remove(function (err) {
+                                            if(err) {
+                                                console.log(err);
+                                                res.status(500);
+                                                res.send({ msg: err });
+                                            }else{
+                                                res.send({});
+                                            }
+                                        });
+                                    }else{
+                                        res.status(401);
+                                        res.send({ msg: 'Unauthorized, this messages wasnt written by you.' });
+                                    }
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+    // Get all files
+       server.get('/projects/:id/files', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/tasks');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+                                project.getFiles(function (err, files) {
+                                    if(err) console.log(err);
+                                    if(files) {
+                                        res.send(files);
+                                    }else{
+                                        res.send([]);
+                                    }
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+    // Create a file
+       server.post('/projects/:id/files', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/files [POST]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+
+                                var now = new Date();
+                                var year = now.getFullYear();
+                                var month = now.getMonth()+1;
+                                var date = now.getDate();
+                                var hours = now.getHours();
+                                var minutes = now.getMinutes();
+                                var seconds = now.getSeconds();
+
+                                File.create({
+                                    name       : req.body.name,
+                                    description: req.body.description,
+                                    url        : req.body.url,
+                                    author     : req.username,
+                                    project_id : req.params.id,
+                                    created    :  year+'-'+month+'-'+date+' '+hours+':'+minutes+':'+seconds
+                                }, function (err, item) {
+                                    if(err) {
+                                        console.log(err);
+                                        res.status(500);
+                                        res.send({ msg: err });
+                                    }else{
+                                        res.send(item);
+
+                                        // Trigger notification HERE
+                                    }
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+    // Delete a file
+        server.del('/projects/:id/files/:fileId', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/files/:fileId [DELETE]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+                                File.get(req.params.fileId, function (err, file) {
+                                    if(file.author == req.username) {
+                                        file.remove(function (err) {
+                                            if(err) {
+                                                console.log(err);
+                                                res.status(500);
+                                                res.send({ msg: err });
+                                            }else{
+                                                res.send({});
+                                            }
+                                        });
+                                    }else{
+                                        res.status(401);
+                                        res.send({ msg: 'Unauthorized, this file wasnt written by you.' });
+                                    }
+                                });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
         server.listen(3000);
     });
 });

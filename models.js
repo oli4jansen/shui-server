@@ -51,5 +51,14 @@ module.exports = function (db, cb) {
    		author      : String
    	});
 
+   	// Files model
+   	db.define('files', {
+   		created     : String,
+   		name        : String,
+   		description : String,
+   		url         : String,
+   		author      : String
+   	});
+
     return cb();
 };
