@@ -6,6 +6,8 @@ var config          = require("./config");
 var _               = require("underscore");
 var crypto          = require("crypto");
 var emailjs         = require("emailjs/email");
+var when            = require('when');
+var nodefn          = require('when/node/function');
 
 var mysql           = require("mysql");
 var orm             = require("orm");
@@ -44,17 +46,21 @@ orm.connect(config.dbPath, function (err, db) {
 
         if(err) console.log(err);
 
-        var User    = db.models.users;
-        var Token   = db.models.tokens;
-        var Project = db.models.projects;
-        var Task    = db.models.tasks;
-        var Message = db.models.messages;
-        var File    = db.models.files;
+        var User         = db.models.users;
+        var Token        = db.models.tokens;
+        var Project      = db.models.projects;
+        var Task         = db.models.tasks;
+        var Message      = db.models.messages;
+        var File         = db.models.files;
+        var Notification = db.models.notifications;
 
-        Project.hasMany('participants', User, { joined: Date }, { reverse: 'projects' });
+        Project.hasMany('participants', User, { joined: Date, invited_by: String }, { reverse: 'projects' });
+
         Task.hasOne('project', Project, { reverse: 'tasks' });
         Message.hasOne('project', Project, { reverse: 'messages' });
         File.hasOne('project', Project, { reverse: 'files' });
+      
+        Notification.hasOne('receiver', User, { reverse: 'notifications' });
 
         db.sync();
 
@@ -171,6 +177,51 @@ orm.connect(config.dbPath, function (err, db) {
             API routes and response functions
         */
 
+        var postNotification = function (receiver, project, sender_name, type) {
+
+            if(typeof receiver !== 'object') {
+                var receiver_email = receiver;
+            }else{
+                var receiver_email = receiver.email;
+            }
+
+            Notification.create({
+                sender_name: sender_name,
+                receiver_email: receiver_email,
+                type: type,
+                project_id: project.id,
+                project_name: project.name,
+                unread: 1
+            }, function (err, item) {
+                if(err) {
+                    console.log(err);
+                }else{
+                    if(typeof receiver === 'object') {
+                        if(receiver.email_notifications) {
+                            // send email to receiver
+                        }
+                        if(receiver.mobile_notifications) {
+                            // send mobile notification
+                        }
+                    }else{
+                        User.get(receiver, function (err, receiver) {
+                            if(receiver && !err) {
+                                if(receiver.email_notifications) {
+                                    // send email to receiver
+                                }
+                                if(receiver.mobile_notifications) {
+                                    // send mobile notification
+                                }
+                            }else{
+                                console.log(err);
+                            }
+                        });
+                    }
+                }
+            });
+
+        };
+
     // Get user details
         server.get('/me', function (req, res) {
             if (!req.username) return res.sendUnauthenticated();
@@ -183,21 +234,31 @@ orm.connect(config.dbPath, function (err, db) {
 
                 if(me) {
 
-                    console.log(me.verification_code);
+                    me.getNotifications(function (err, notifications) {
+                        me.unreadNotifications = 0;
+                        if(err) {
+                            console.log(err);
+                        }else{
+                            notifications.forEach(function (notification) {
+                                if(notification.unread) me.unreadNotifications++;
+                            });
+                        }
+                        if(me.verification_code == '') {
+                            var verified = true;
+                        }else{
+                            var verified = false;
+                        }
 
-                    if(me.verification_code == '') {
-                        var verified = true;
-                    }else{
-                        var verified = false;
-                    }
-
-                    res.send({
-                        verified: verified,
-                        name: me.name,
-                        email: me.email,
-                        emailNotifications: me.email_notifications,
-                        mobileNotifications: me.mobile_notifications
+                        res.send({
+                            verified: verified,
+                            name: me.name,
+                            email: me.email,
+                            emailNotifications: me.email_notifications,
+                            mobileNotifications: me.mobile_notifications,
+                            unreadNotifications: me.unreadNotifications
+                        });
                     });
+
                 }else{
                     res.status(404);
                     res.send({})
@@ -234,6 +295,71 @@ orm.connect(config.dbPath, function (err, db) {
                 res.status(500);
                 res.send({ msg: 'You didnt provide any information to update.' });
             }
+        });
+
+    // Get user notifications
+        server.get('/me/notifications', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/me/notifications');
+            res.contentType = "application/json";
+
+            User.get(req.username, function (err, me) {
+
+                if(err) console.log(err);
+
+                if(me) {
+
+                    me.getNotifications(function (err, notifications) {
+                        if(err) console.log(err);
+                        if(notifications && notifications.length > 0) {
+                            res.send(notifications);
+                        }else{
+                            console.log('Geen notifications:');
+                            console.log(notifications);
+                            res.send([]);
+                        }
+                    });
+
+                }else{
+                    res.status(404);
+                    res.send({})
+                }
+            });
+        });
+
+    // Read user notifications
+        server.post('/me/notifications', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/me/notifications [POST]');
+            res.contentType = "application/json";
+
+            User.get(req.username, function (err, me) {
+
+                if(err) console.log(err);
+
+                if(me) {
+
+                    me.getNotifications(function (err, notifications) {
+                        if(err) console.log(err);
+                        if(notifications) {
+
+                            for(var i=0;i<notifications.length;i++) {
+                                if(notifications[i].unread) notifications[i].unread = 0;
+                                notifications[i].save(function (err) {
+                                    if(err) console.log(err);
+                                });
+                            }
+                            res.send({});
+                        }else{
+                            res.send({});
+                        }
+                    });
+
+                }else{
+                    res.status(404);
+                    res.send({})
+                }
+            });
         });
 
     // Check email address verification code
@@ -276,13 +402,19 @@ orm.connect(config.dbPath, function (err, db) {
                 me.getProjects(function (err, projects) {
 
                     if(projects && projects.length > 0) {
+                        var counter = projects.length;
+
                         projects.forEach(function (project) {
+
+                            var index = projects.indexOf(project);
 
                             project.openTasks = 0;
                             project.myTasks = 0;
                             project.participants = [];
 
                             project.getTasks(function (err, tasks) {
+                                if(err) console.log(err);
+
                                 if(tasks) {
                                     tasks.forEach(function (task) {
                                         if(!task.finished) project.openTasks++;
@@ -297,7 +429,8 @@ orm.connect(config.dbPath, function (err, db) {
                                         project.participants.push({ name: participant.name, email: participant.email });
                                     });
 
-                                    res.send(projects);
+                                    counter--;
+                                    if(counter==0) res.send(projects);
                                 });
                             });
                         });
@@ -305,6 +438,65 @@ orm.connect(config.dbPath, function (err, db) {
                         res.send([]);
                     }
                 });
+            });
+        });
+
+    // Create a project
+       server.post('/projects', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects [POST]');
+            res.contentType = "application/json";
+
+            User.get(req.username, function (err, me) {
+                if(me) {
+                    if(req.body.name && req.body.participants) {
+
+                        Project.create({
+                            name: req.body.name
+                        }, function (err, project) {
+                            if(err) {
+                                console.log(err);
+                                res.status(500);
+                                res.send({ msg: err });
+                            }else{
+                                project.addParticipants(me, function(err){
+                                    if(!err) {
+                                        req.body.participants.forEach(function (participant) {
+                                            if(participant.email !== req.username) {
+                                                User.get(participant.email, function (err, person) {
+                                                    if(err) console.log(err);
+                                                    if(person) {
+                                                        project.addParticipants(person, { invited_by: req.username }, function(err){
+                                                            if(err) console.log(err);
+                                                            postNotification(person.email, project, me.name, 'invite');
+                                                        });
+                                                    }else{
+                                                        console.log(person);
+                                                    }
+                                                });
+                                            }else{
+                                                console.log('Niet toegevoegd want is oprichter.');
+                                            }
+                                        });
+                                        res.send(project);
+                                    }else{
+                                        console.log(err);
+                                        project.remove();
+                                        res.status(500);
+                                        res.send({ msg: err });
+                                    }
+                                });
+                            }
+                        });
+
+                    }else{
+                        res.status(500);
+                        res.send({ msg: 'Please provide complete data.' });
+                    }
+                }else{
+                    res.status(403);
+                    res.send({ msg: 'Unauthorized.' });
+                }
             });
         });
 
@@ -334,7 +526,8 @@ orm.connect(config.dbPath, function (err, db) {
                                     participants.forEach(function(participant) {
                                         response.participants.push({
                                             name: participant.name,
-                                            email: participant.email
+                                            email: participant.email,
+                                            invited_by: participant.invited_by
                                         });
                                     });
                                     response.tasks = (tasks) ? tasks.length : 0;
@@ -376,14 +569,15 @@ orm.connect(config.dbPath, function (err, db) {
                                                 res.status(404);
                                                 res.send({ msg: 'This person isnt registered for Shui yet.' });
                                             }else{
-                                                project.addParticipants(person, function(err){
+                                                project.addParticipants(person, { invited_by: req.username }, function(err){
                                                     if(!err) {
                                                         res.send({
                                                             name: person.name,
-                                                            email: person.email
+                                                            email: person.email,
+                                                            invited_by: req.username
                                                         });
 
-                                                        // Notification for person
+                                                        postNotification(person.email, project, me.name, 'invite');
 
                                                     }else{
                                                         res.status(500);
@@ -398,6 +592,71 @@ orm.connect(config.dbPath, function (err, db) {
                                         res.send({ msg: 'This person is already a participant.' });
                                     }
                                 });
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
+    // Delete a participant
+        server.del('/projects/:id/participants/:participantId', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id/participants/:participantId [DELETE]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                if(err) console.log(err);
+                project.getParticipants(function (err, participants) {
+                    if(err) console.log(err);
+                    var participantCount = participants.length;
+                    User.get(req.username, function (err, me) {
+                     if(err) console.log(err);
+                       project.hasParticipants(me, function (err, bool) {
+                            if(err) console.log(err);
+                            if(bool) {
+                                var participant = false;
+                                participants.forEach(function (item) {
+                                    if(item.email == req.params.participantId) participant = item;
+                                });
+
+                                if(participant) {
+                                    if(participant.email == req.username || participant.invited_by == req.username) {
+                                        project.removeParticipants(participant, function (err) {
+                                            if(err) {
+                                                console.log(err);
+                                                res.status(500);
+                                                res.send({ msg: err });
+                                            }else{
+                                                res.send({});
+                                                if(participantCount === 1) {
+                                                    project.removeMessages(function (err) {
+                                                        if(err) console.log(err);
+                                                        project.removeTasks(function (err) {
+                                                            if(err) console.log(err);
+                                                            project.removeFiles(function (err) {
+                                                                if(err) console.log(err);
+                                                                project.remove(function (err) {
+                                                                    if(err) console.log(err);
+                                                                });
+                                                            });
+                                                        });
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    }else{
+                                        res.status(403);
+                                        res.send({ msg: 'The user is not authorized to delete this participant.' });                                                    
+                                    }
+                                }else{
+                                    console.log(err);
+                                    res.status(404);
+                                    res.send({ msg: 'The user to delete was no participant.' });
+                                }
                             }else{
                                 res.status(404);
                                 res.send({ msg: 'User does not have a project with that ID.' });

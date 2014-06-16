@@ -8,6 +8,7 @@
     "dependencies": {
         "underscore": "1.x",
         "crypto": "0.0.3",
+        "when": "3.2.x",
         "restify": "2.8.1",
         "restify-oauth2": "4.0.0",
         "mysql": ">=2.3.2",

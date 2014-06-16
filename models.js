@@ -60,5 +60,14 @@ module.exports = function (db, cb) {
    		author      : String
    	});
 
+   	// Notifications model
+   	db.define('notifications', {
+   		type         : String,
+      unread       : Boolean,
+      project_id   : Number,
+      project_name : String,
+   		sender_name  : String
+   	});
+
     return cb();
 };
