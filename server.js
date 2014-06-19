@@ -88,6 +88,7 @@ orm.connect(config.dbPath, function (err, db) {
 
         // Functie die aangesproken wordt als de gebruiker geen access token heeft en inlogt met emailadress +
         hooks.grantUserToken = function (credentials, req, cb) {
+
             // Gebruiker met opgegeven emailadres opzoeken
             User.find({ email: credentials.username }, function(err, data) {
 
@@ -95,50 +96,64 @@ orm.connect(config.dbPath, function (err, db) {
 
                 // Als dit emailadres niks oplevert:
                 if(data.length === 0) {
-                    var timestamp = (new Date()).getTime();
-                    // Generate verification code
-                    var code = crypto.createHash('sha1').update(credentials.username+timestamp).digest("hex");
 
-                    // Create new username
-                    User.create([{
-                        verification_code: code,
-                        name: '',
-                        email: credentials.username,
-                        password: credentials.password
-                    }], function(err, data){
+                    crypto.randomBytes(100, function(ex, salt) {
+                        salt = salt.toString('hex');
+                        var timestamp = (new Date()).getTime();
+                        // Generate verification code
+                        var code = crypto.createHash('sha1').update(credentials.username+timestamp).digest("hex");
+                        var password = crypto.createHash('sha512').update(credentials.password).update(salt).digest('base64');
 
-                        if(err) console.log(err);
+                        // Create new username
+                        User.create([{
+                            verification_code: code,
+                            name: '',
+                            email: credentials.username,
+                            password: password,
+                            salt: salt,
+                            email_notifications: true
+                        }], function(err, data){
 
-                        var message = {
-                           text:    "Please navigate to "+config.clients.webClient.clientPath+"/verification/"+credentials.username+"/"+code, 
-                           from:    "Olivier Jansen <oli4jansen.nl@gmail.com>", 
-                           to:      credentials.username,
-                           subject: "Shui - Confirm email address",
-                           attachment: 
-                           [
-                              {data:"<html>Please navigate to <a href=\""+config.clients.webClient.clientPath+"/verification/"+credentials.username+"/"+code+"\">"+config.clients.webClient.clientPath+"/verification/"+credentials.username+"/"+code+"</a> to confirm your email address.</html>", alternative:true}
-                           ]
-                        };
-
-                        mailServer.send(message, function(err, message) {
                             if(err) console.log(err);
 
-                            // Token aanmaken
-                            var token = generateToken(credentials.username + ":" + credentials.password);                       
-                            // Token opslaan in database
-                            Token.create([{
-                                token: token,
-                                email: credentials.username
-                            }], function(err, data){
+                            var message = {
+                               text:    "Please navigate to "+config.clients.webClient.clientPath+"/verification/"+credentials.username+"/"+code, 
+                               from:    "Olivier Jansen <oli4jansen.nl@gmail.com>", 
+                               to:      credentials.username,
+                               subject: "Shui - Confirm email address",
+                               attachment: 
+                               [
+                                  {data:"<html>Please navigate to <a href=\""+config.clients.webClient.clientPath+"/verification/"+credentials.username+"/"+code+"\">"+config.clients.webClient.clientPath+"/verification/"+credentials.username+"/"+code+"</a> to confirm your email address.</html>", alternative:true}
+                               ]
+                            };
+
+                            mailServer.send(message, function(err, message) {
                                 if(err) console.log(err);
-                                // Token terugsturen naar client
-                                return cb(null, token);
+
+                                // Token aanmaken
+                                var token = generateToken(credentials.username + ":" + credentials.password);                       
+                                // Token opslaan in database
+                                Token.create([{
+                                    token: token,
+                                    email: credentials.username
+                                }], function(err, data){
+                                    if(err) console.log(err);
+                                    // Token terugsturen naar client
+                                    return cb(null, token);
+                                });
                             });
                         });
                     });
+
                 } else if(data.length === 1) {
+
+                    var passwordHashed = crypto.createHash('sha512').update(credentials.password).update(data[0].salt).digest('base64');
+
+                    console.log('Password from DB: '+data[0].password);
+                    console.log('Password Hashed: '+passwordHashed);
+
                     // Wachtwoord controleren
-                    if(data[0].password === credentials.password) {
+                    if(data[0].password === passwordHashed) {
                         // Token aanmaken
                         var token = generateToken(credentials.username + ":" + credentials.password);
                         // Token opslaan in database
@@ -151,7 +166,6 @@ orm.connect(config.dbPath, function (err, db) {
                         });
 
                     }else{
-                        console.log(data[0].password + '!==' + credentials.password);
                         return cb(null, false);
                     }
                 } else {
@@ -198,7 +212,7 @@ orm.connect(config.dbPath, function (err, db) {
                 }else{
                     if(typeof receiver === 'object') {
                         if(receiver.email_notifications) {
-                            // send email to receiver
+                            sendEmailNotification(receiver, project, sender_name, type);
                         }
                         if(receiver.mobile_notifications) {
                             // send mobile notification
@@ -207,7 +221,7 @@ orm.connect(config.dbPath, function (err, db) {
                         User.get(receiver, function (err, receiver) {
                             if(receiver && !err) {
                                 if(receiver.email_notifications) {
-                                    // send email to receiver
+                                    sendEmailNotification(receiver, project, sender_name, type);
                                 }
                                 if(receiver.mobile_notifications) {
                                     // send mobile notification
@@ -218,6 +232,54 @@ orm.connect(config.dbPath, function (err, db) {
                         });
                     }
                 }
+            });
+
+        };
+
+        var sendEmailNotification = function (receiver, project, sender_name, type) {
+
+            var message = {
+                text:    "Please navigate to "+config.clients.webClient.clientPath+"/notifications to learn more.", 
+                from:    "Olivier Jansen <oli4jansen.nl@gmail.com>", 
+                to:      receiver.email,
+                subject: sender_name,
+                attachment: [{
+                    data:"<html><a href=\""+config.clients.webClient.clientPath+"/notifications\">View this notification on Unify</a></html>",
+                    alternative:true
+                }]
+            };
+
+            switch(notification.type) {
+                case 'picture':
+                    message.subject = message.subject + ' added a picture to ';
+                    break;
+                case 'document':
+                    message.subject = message.subject + ' added a document to ';
+                    break;
+                case 'message':
+                    message.subject = message.subject + ' wrote a message in ';
+                    break;
+                case 'invite':
+                    message.subject = message.subject + ' invited you to ';
+                    break;
+                case 'uninvite':
+                    message.subject = message.subject + ' removed you from ';
+                    break;
+                case 'location':
+                    message.subject = message.subject + ' added a location to ';
+                    break;
+                case 'task_assigned':
+                    message.subject = message.subject + ' assigned you a task for ';
+                    break;
+                default:
+                    message.subject = message.subject + ' did something in ';
+                    break;
+            }
+
+            message.subject = message.subject+project.name;
+
+            mailServer.send(message, function(err, message) {
+                if(err) console.log(err);
             });
 
         };
@@ -272,10 +334,11 @@ orm.connect(config.dbPath, function (err, db) {
             console.log('/me [POST]');
             res.contentType = "application/json";
 
-            if(req.body.name !== undefined && req.body.name !== '') {
+            if(req.body.name !== undefined && req.body.name !== '' && req.body.emailNotifications !== undefined && req.body.emailNotifications !== '') {
                 User.get(req.username, function (err, me) {
 
                     me.name = req.body.name;
+                    me.email_notifications = req.body.emailNotifications;
                     me.save(function (err) {
                         if(err) {
                             console.log(err);
@@ -327,6 +390,31 @@ orm.connect(config.dbPath, function (err, db) {
             });
         });
 
+    // Get user notification count
+        server.get('/me/notifications/count', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/me/notifications/count');
+            res.contentType = "application/json";
+
+            User.get(req.username, function (err, me) {
+
+                if(err) console.log(err);
+
+                if(me) {
+                    
+                    me.getNotifications().each().filter(function (notification) {
+                        return notification.unread == 1;
+                    }).get(function (notifications) {
+                        res.send({ count: notifications.length });
+                    });
+
+                }else{
+                    res.status(404);
+                    res.send({})
+                }
+            });
+        });
+
     // Read user notifications
         server.post('/me/notifications', function (req, res) {
             if (!req.username) return res.sendUnauthenticated();
@@ -339,20 +427,11 @@ orm.connect(config.dbPath, function (err, db) {
 
                 if(me) {
 
-                    me.getNotifications(function (err, notifications) {
+                    me.getNotifications().each(function (notification) {
+                        if(notification.unread) notification.unread = 0;
+                    }).save(function (err) {
                         if(err) console.log(err);
-                        if(notifications) {
-
-                            for(var i=0;i<notifications.length;i++) {
-                                if(notifications[i].unread) notifications[i].unread = 0;
-                                notifications[i].save(function (err) {
-                                    if(err) console.log(err);
-                                });
-                            }
-                            res.send({});
-                        }else{
-                            res.send({});
-                        }
+                        res.send({});
                     });
 
                 }else{
@@ -389,6 +468,97 @@ orm.connect(config.dbPath, function (err, db) {
                         res.send({ msg: 'Your code didnt match ours.' });                        
                     }
                 });
+            }
+        });
+
+    // Set up a reset-password link
+        server.get('/forgotpass/:email', function (req, res) {
+            console.log('/forgotpass/:email');
+            res.contentType = "application/json";
+
+            if(req.params.email !== undefined && req.params.email !== '') {
+                User.get(req.params.email, function (err, me) {
+
+                    if(!err) {
+
+                        var timestamp = (new Date()).getTime();
+                        me.reset_code = crypto.createHash('sha1').update(req.params.email+timestamp).digest("hex");
+                        me.save(function (err) {
+                            if(err) {
+                                console.log(err);
+                                res.status(500);
+                                res.send({ msg: 'Your request would have been accepted but we couldnt update our database.' });
+                            }else{
+                                var message = {
+                                   text:    "Please navigate to "+config.clients.webClient.clientPath+"/resetpass/"+req.params.email+"/"+me.reset_code, 
+                                   from:    "Olivier Jansen <oli4jansen.nl@gmail.com>", 
+                                   to:      req.params.email,
+                                   subject: "Shui - Reset your password",
+                                   attachment: 
+                                   [
+                                      {data:"<html>Please navigate to <a href=\""+config.clients.webClient.clientPath+"/resetpass/"+req.params.email+"/"+me.reset_code+"\">"+config.clients.webClient.clientPath+"/resetpass/"+req.params.email+"/"+me.reset_code+"</a> to reset your password.</html>", alternative:true}
+                                   ]
+                                };
+
+                                mailServer.send(message, function(err, message) {
+                                    if(err) console.log(err);
+                                    res.send({});
+                                });
+                            }
+                        });
+                    }else{
+                        res.status(500);
+                        res.send({ msg: err });                        
+                    }
+                });
+            }else{
+                req.status(500);
+                req.send({ msg: 'You did not provide all data.' });
+            }
+        });
+
+    // Reset the password (if code is valid)
+        server.post('/forgotpass/:email/:code', function (req, res) {
+            console.log('/forgotpass/:email/:code [POST]');
+            res.contentType = "application/json";
+
+            if(req.params.email !== undefined && req.params.email !== '' && req.params.code !== undefined && req.params.code !== '' && req.body.password !== undefined) {
+                User.get(req.params.email, function (err, me) {
+
+                    if(!err) {
+
+                        if(me.reset_code == req.params.code) {
+                            crypto.randomBytes(100, function(ex, salt) {
+                                salt = salt.toString('hex');
+                                var password = crypto.createHash('sha512').update(req.body.password).update(salt).digest('base64');
+
+                                me.reset_code = '';
+                                me.password = password;
+                                me.salt = salt;
+
+                                me.save(function (err) {
+                                    if(err) {
+                                        console.log(err);
+                                        res.status(500);
+                                        res.send({ msg: 'Your request would have been accepted but we couldnt update our database.' });
+                                    }else{
+                                        res.send({});
+                                    }
+                                });
+                            });
+                        }else{
+                            res.status(401);
+                            res.send({ msg: 'The reset code did not match the code we have stored in our database. It could have expired.' });
+                        }
+
+                    }else{
+                        res.status(500);
+                        res.send({ msg: err });                        
+                    }
+                });
+            }else{
+                req.status(500);
+                req.send({ msg: 'You did not provide all data.' });
             }
         });
 
@@ -632,6 +802,9 @@ orm.connect(config.dbPath, function (err, db) {
                                                 res.send({ msg: err });
                                             }else{
                                                 res.send({});
+
+                                                if(participant.invited_by == req.username) postNotification(participant.email, project, me.name, 'uninvite');
+
                                                 if(participantCount === 1) {
                                                     project.removeMessages(function (err) {
                                                         if(err) console.log(err);
@@ -724,7 +897,7 @@ orm.connect(config.dbPath, function (err, db) {
                                     }else{
                                         res.send(item);
 
-                                        // Trigger notification HERE (to person task is assigned to)
+                                        postNotification(req.body.assignedTo, project, me.name, 'task_assigned');
                                     }
                                 });
                             }else{
@@ -880,7 +1053,9 @@ orm.connect(config.dbPath, function (err, db) {
                                     }else{
                                         res.send(item);
 
-                                        // Trigger notification HERE (to person task is assigned to)
+                                        participants.forEach(function (participant) {
+                                            if(participant.email !== me.email) postNotification(participant.email, project, me.name, 'message');
+                                        });
                                     }
                                 });
                             }else{
@@ -993,8 +1168,10 @@ orm.connect(config.dbPath, function (err, db) {
                                         res.send({ msg: err });
                                     }else{
                                         res.send(item);
-
-                                        // Trigger notification HERE
+                                        
+                                        participants.forEach(function (participant) {
+                                            if(participant.email !== me.email) postNotification(participant.email, project, me.name, 'file');
+                                        });
                                     }
                                 });
                             }else{

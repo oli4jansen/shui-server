@@ -4,10 +4,12 @@ module.exports = function (db, cb) {
 
 	// User model
     db.define("users", {
-    	verification_code   : String,
+        verification_code   : String,
+        reset_code          : String,
         name                : String,
         email               : String,
         password            : String,
+        salt                : String,
         email_notifications : Boolean,
         mobile_notifications: Boolean
     }, {
