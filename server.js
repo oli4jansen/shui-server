@@ -6,7 +6,6 @@ var config          = require("./config");
 var _               = require("underscore");
 var crypto          = require("crypto");
 var emailjs         = require("emailjs/email");
-var when            = require('when');
 var nodefn          = require('when/node/function');
 
 var mysql           = require("mysql");
