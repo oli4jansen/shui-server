@@ -106,6 +106,7 @@ orm.connect(config.dbPath, function (err, db) {
                         // Create new username
                         User.create([{
                             verification_code: code,
+                            reset_code: '',
                             name: '',
                             email: credentials.username,
                             password: password,
