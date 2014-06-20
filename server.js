@@ -1220,6 +1220,6 @@ orm.connect(config.dbPath, function (err, db) {
             });
         });
 
-        server.listen(3000);
+        server.listen(80);
     });
 });
