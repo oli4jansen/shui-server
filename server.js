@@ -283,6 +283,10 @@ orm.connect(config.dbPath, function (err, db) {
 
         };
 
+    // Public test page
+        server.get('/', function (req, res) {
+            res.send('I\'m Unify\'s API server.')
+        });
     // Get user details
         server.get('/me', function (req, res) {
             if (!req.username) return res.sendUnauthenticated();
