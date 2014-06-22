@@ -696,12 +696,15 @@ orm.connect(config.dbPath, function (err, db) {
                                         });
                                     }
 
+                                    console.log(participants);
+
                                     response.participants = [];
                                     participants.forEach(function(participant) {
                                         response.participants.push({
                                             name: participant.name,
                                             email: participant.email,
-                                            invited_by: participant.invited_by
+                                            invited_by: participant.invited_by,
+                                            joined: participant.joined
                                         });
                                     });
                                     response.tasks = (tasks) ? tasks.length : 0;
