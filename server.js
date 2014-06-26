@@ -895,6 +895,7 @@ orm.connect(config.dbPath, function (err, db) {
                                     assignedBy  : req.username,
                                     assignedTo  : req.body.assignedTo,
                                     finished    : false,
+                                    finished_timestamp : '',
                                     hours       : 0
                                 }, function (err, item) {
                                     if(err) {
@@ -967,6 +968,16 @@ orm.connect(config.dbPath, function (err, db) {
                             if(bool) {
                                 Task.get(req.params.taskId, function (err, task) {
                                     if(task.assignedTo == req.username) {
+
+                                        var now = new Date();
+                                        var year = now.getFullYear();
+                                        var month = now.getMonth()+1;
+                                        var date = now.getDate();
+                                        var hours = now.getHours();
+                                        var minutes = now.getMinutes();
+                                        var seconds = now.getSeconds();
+
+                                        task.finished_timestamp = year+'-'+month+'-'+date+' '+hours+':'+minutes+':'+seconds;
                                         task.hours = parseFloat(req.body.hours);
                                         task.finished = true;
                                         task.evaluation = req.body.evaluation;

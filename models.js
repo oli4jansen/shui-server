@@ -37,13 +37,14 @@ module.exports = function (db, cb) {
 
    	// Task model
    	db.define('tasks', {
-   		name        : String,
-   		description : String,
-   		assignedBy  : String,
-   		assignedTo  : String,
-   		finished    : Boolean,
-   		evaluation  : String,
-   		hours       : String
+   		name               : String,
+   		description        : String,
+   		assignedBy         : String,
+   		assignedTo         : String,
+      finished           : Boolean,
+      finished_timestamp : String,
+   		evaluation         : String,
+   		hours              : String
    	});
 
    	// Message model
