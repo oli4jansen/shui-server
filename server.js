@@ -53,7 +53,7 @@ orm.connect(config.dbPath, function (err, db) {
         var File         = db.models.files;
         var Notification = db.models.notifications;
 
-        Project.hasMany('participants', User, { joined: Date, invited_by: String }, { reverse: 'projects' });
+        Project.hasMany('participants', User, { joined: Date, invited_by: String }, { reverse: 'projects', cache: false });
 
         Task.hasOne('project', Project, { reverse: 'tasks' });
         Message.hasOne('project', Project, { reverse: 'messages' });

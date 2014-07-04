@@ -33,7 +33,9 @@ module.exports = function (db, cb) {
    		name     : String,
    		deadline : String,
    		created  : String
-   	});
+   	}, {
+      cache: false
+    });
 
    	// Task model
    	db.define('tasks', {
