@@ -735,8 +735,13 @@ orm.connect(config.dbPath, function (err, db) {
                                 project.name = req.body.name || project.name;
 
                                 project.save(function (err) {
-                                    if(err) console.log(err);
-                                    res.send({});
+                                    if(err) {
+                                        console.log(err);
+                                        res.status(500);
+                                       res.send({ msg: err });
+                                    }else{
+                                        res.send({});                                        
+                                    }
                                 });
 
                             }else{
