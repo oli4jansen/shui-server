@@ -721,6 +721,34 @@ orm.connect(config.dbPath, function (err, db) {
             });
         });
 
+    // Change the project details
+        server.put('/projects/:id', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/projects/:id [PUT]');
+            res.contentType = "application/json";
+
+            Project.get(req.params.id, function (err, project) {
+                project.getParticipants(function (err, participants) {
+                    User.get(req.username, function (err, me) {
+                        project.hasParticipants(me, function (err, bool) {
+                            if(bool) {
+                                project.name = req.body.name || project.name;
+
+                                project.save(function (err) {
+                                    if(err) console.log(err);
+                                    res.send({});
+                                });
+
+                            }else{
+                                res.status(404);
+                                res.send({ msg: 'User does not have a project with that ID.' });
+                            }
+                        });
+                    });
+                });
+            });
+        });
+
     // Invite someone
         server.put('/projects/:id/participants', function (req, res) {
             if (!req.username) return res.sendUnauthenticated();
