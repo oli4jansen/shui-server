@@ -286,8 +286,38 @@ orm.connect(config.dbPath, function (err, db) {
 
     // Public test page
         server.get('/', function (req, res) {
-            res.send('I\'m Unify\'s API server.')
+
+            Token.count(function (err, count) {
+                if(!err) {
+                    res.send({ count: count });
+                }else{
+                    res.send(err);
+                }
+            });
         });
+
+        server.post('/logout', function (req, res) {
+            if (!req.username) return res.sendUnauthenticated();
+            console.log('/logout');
+            res.contentType = "application/json";
+
+            if(req.body.token) {
+                Token.find({ token: req.body.token, email: req.username }.remove(function (err) {
+
+                    if(!err) {
+                        res.send({});
+                    }else{
+                        res.status(500);
+                        res.send({ message: err });
+                    }
+
+                });
+            }else{
+                res.status(404);
+                res.send({});
+            }
+        });
+
     // Get user details
         server.get('/me', function (req, res) {
             if (!req.username) return res.sendUnauthenticated();
