@@ -302,7 +302,7 @@ orm.connect(config.dbPath, function (err, db) {
             res.contentType = "application/json";
 
             if(req.body.token) {
-                Token.find({ token: req.body.token, email: req.username }.remove(function (err) {
+                Token.find({ token: req.body.token, email: req.username }).remove(function (err) {
 
                     if(!err) {
                         res.send({});
