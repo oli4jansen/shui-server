@@ -302,21 +302,14 @@ orm.connect(config.dbPath, function (err, db) {
             res.contentType = "application/json";
 
             if(req.body.token !== undefined || req.body.token == '') {
-                Token.find({ token: req.body.token, email: req.username }, function(err, data) {
+                Token.find({ token: req.body.token, email: req.username }).remove(function (err) {
 
-                    console.log('Deleted where token was '+req.body.token+' and email was '+req.username);
-                    console.log(data);
-                    console.log(data.length);
-
-                    data.remove(function (err) {
-                        if(!err) {
-                            res.send({});
-                        }else{
-                            res.status(500);
-                            res.send({ message: err });
-                        }
-                    });
-
+                    if(!err) {
+                        res.send({});
+                    }else{
+                        res.status(500);
+                        res.send({ message: err });
+                    }
 
                 });
             }else{
