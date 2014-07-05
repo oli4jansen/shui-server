@@ -301,8 +301,10 @@ orm.connect(config.dbPath, function (err, db) {
             console.log('/logout');
             res.contentType = "application/json";
 
-            if(req.body.token) {
+            if(req.body.token !== undefined || req.body.token == '') {
                 Token.find({ token: req.body.token, email: req.username }).remove(function (err) {
+
+                    console.log('Deleted where token was '+req.body.token+' and email was '+req.username);
 
                     if(!err) {
                         res.send({});
