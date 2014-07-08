@@ -566,6 +566,9 @@ orm.connect(config.dbPath, function (err, db) {
 
                     if(!err) {
 
+                        console.log('Code provided:' + req.params.code);
+                        console.log('Code database:' + me.reset_code);
+
                         if(me.reset_code == req.params.code) {
                             crypto.randomBytes(100, function(ex, salt) {
                                 salt = salt.toString('hex');
