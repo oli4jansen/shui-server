@@ -510,13 +510,13 @@ orm.connect(config.dbPath, function (err, db) {
             console.log('/forgotpass/:email');
             res.contentType = "application/json";
 
-            if(req.params.email !== undefined && req.params.email !== '') {
+            if(req.params.email && req.params.email !== undefined && req.params.email !== '') {
                 User.get(req.params.email, function (err, me) {
 
                     if(!err) {
 
                         var timestamp = (new Date()).getTime();
-                        me.reset_code = crypto.createHash('sha1').update(req.params.email+timestamp).digest("hex");
+                        me.reset_code = crypto.createHash('sha1').update(req.params.email + timestamp).digest("hex");
                         me.save(function (err) {
                             if(err) {
                                 console.log(err);
@@ -535,8 +535,13 @@ orm.connect(config.dbPath, function (err, db) {
                                 };
 
                                 mailServer.send(message, function(err, message) {
-                                    if(err) console.log(err);
-                                    res.send({});
+                                    if(err) {
+                                        console.log(err);
+                                        res.status(500);
+                                        res.send({ msg: err });
+                                    }else{
+                                        res.send({});                                        
+                                    }
                                 });
                             }
                         });
