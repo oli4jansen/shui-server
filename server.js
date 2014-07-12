@@ -6,7 +6,6 @@ var config          = require("./config");
 var _               = require("underscore");
 var crypto          = require("crypto");
 var emailjs         = require("emailjs/email");
-var nodefn          = require('when/node/function');
 
 var mysql           = require("mysql");
 var orm             = require("orm");
@@ -16,7 +15,7 @@ var restifyOAuth2   = require("restify-oauth2");
 
 // Restify server instellen
 var server = restify.createServer({
-    name: "Shui Server",
+    name: "Unify Server",
     version: require("./package.json").version
 });
 

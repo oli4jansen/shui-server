@@ -1,7 +1,7 @@
 {
-    "name": "shui-server",
-    "description": "API server for Shui",
-    "keywords": ["shui"],
+    "name": "unify-server",
+    "description": "API server for Unify",
+    "keywords": ["unify"],
     "version": "0.0.1",
     "author": "Olivier Jansen <oli4jansen.nl@gmail.com> (http://oli4jansen.nl/)",
     "main": "server.js",
@@ -13,5 +13,12 @@
         "mysql": ">=2.3.2",
         "orm": ">=2.0.0-alpha6",
         "emailjs": "0.3.x"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/oli4jansen/unify-server.git"
+    },
+    "engines": {
+        "node": "0.10.x"
     }
 }
