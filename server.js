@@ -717,36 +717,52 @@ orm.connect(config.dbPath, function (err, db) {
             console.log('/projects/:id');
             res.contentType = "application/json";
 
+            // Project met dit ID ophalen
             Project.get(req.params.id, function (err, project) {
+                // Alle deelnemers ophalen
                 project.getParticipants(function (err, participants) {
+                    // Huidige gebruiker ophalen
                     User.get(req.username, function (err, me) {
+                        // Kijken of huidige gebruiker bij deelnemers zit
                         project.hasParticipants(me, function (err, bool) {
+                            // Zo ja:
                             if(bool) {
-                                project.getTasks(function (err, tasks) {
-                                    var response = project;
+                                // Response object opzetten
+                                var response = project;
 
+                                // Alle taken ophalen
+                                project.getTasks(function (err, tasks) {
                                     response.myTasks = 0;
 
-                                    if(tasks) {
+                                    if(tasks && !err) {
                                         tasks.forEach(function (task) {
                                             if(!task.finished && task.assignedTo == req.username) response.myTasks++;
                                         });
-                                    }
+                                    }else if(err) { console.log(err); }
 
-                                    console.log(participants);
+                                    // Alle files ophalen
+                                    project.getFiles(function (err, files) {
+                                        if(files && !err) {
+                                            response.files = files;
+                                        }else{
+                                            if(err) console.log(err);
+                                            response.files = [];
+                                        }
 
-                                    response.participants = [];
-                                    participants.forEach(function(participant) {
-                                        response.participants.push({
-                                            name: participant.name,
-                                            email: participant.email,
-                                            invited_by: participant.invited_by,
-                                            joined: participant.joined
+                                        response.participants = [];
+                                        participants.forEach(function(participant) {
+                                            response.participants.push({
+                                                name: participant.name,
+                                                email: participant.email,
+                                                invited_by: participant.invited_by,
+                                                joined: participant.joined
+                                            });
                                         });
-                                    });
-                                    response.tasks = (tasks) ? tasks.length : 0;
+                                        response.tasks = (tasks) ? tasks.length : 0;
 
-                                    res.send(response);
+                                        res.send(response);
+
+                                    });
                                 });
                             }else{
                                 res.status(404);
